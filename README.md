@@ -1,10 +1,11 @@
 # Laravel RepoKit
+> Clean architecture scaffolding for Laravel (Repository + Service layers)
 
 ![PHP](https://img.shields.io/badge/PHP-8.1+-blue)
 ![Laravel](https://img.shields.io/badge/Laravel-10%2B-red)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A lightweight Laravel package that generates Repository and Service layer scaffolding to enforce clean architecture and reduce boilerplate in backend applications.
+A Laravel package to scaffold Repository and Service layers, helping enforce clean architecture, improve maintainability, and reduce boilerplate in backend applications.
 
 ---
 
@@ -17,6 +18,36 @@ Laravel RepoKit helps you:
 - Maintain a clean and scalable architecture
 - Reduce repetitive boilerplate code
 - Speed up development with automated scaffolding
+
+This also helps you standardize your application structure across teams and projects.
+
+---
+
+## Key Features
+
+- Repository & Service scaffolding
+- Query Builder and Eloquent support
+- Automatic interface binding
+- Clean architecture enforcement
+- Consistent project structure
+
+---
+
+## Architecture Overview
+
+Controller → Service → Repository → Database
+
+- **Controller** handles HTTP requests
+- **Service** contains business logic
+- **Repository** handles data access
+
+---
+
+## Auto-Binding
+
+All generated interfaces are automatically bound to their implementations in `AppServiceProvider`.
+
+No manual dependency injection setup is required.
 
 ---
 
@@ -53,7 +84,7 @@ This creates:
 - `app/Repositories/Contracts/UserRepositoryInterface.php`
 - `app/Repositories/Databases/UserRepository.php`
 
-The generated repository uses `Illuminate\Support\Facades\DB` with a raw query builder approach.
+The generated repository uses Laravel's Query Builder (`DB` facade) with a raw query builder approach.
 
 #### Repository with Eloquent Model
 
@@ -61,7 +92,7 @@ The generated repository uses `Illuminate\Support\Facades\DB` with a raw query b
 php artisan make:repository User --model=User
 ```
 
-Same files, but the implementation uses Eloquent model injection instead of Query Builder. The model is resolved as `App\Models\User` unless a fully-qualified class name is provided.
+Generates the same structure, but uses Eloquent model injection instead of Query Builder. The model is resolved as `App\Models\User` unless a fully-qualified class name is provided.
 
 ---
 
@@ -99,11 +130,6 @@ Generates the same file structure but with an empty interface and a minimal serv
 
 ---
 
-### Auto-Binding
-
-Both commands automatically register the interface-to-implementation binding inside your `AppServiceProvider::register()` method. No manual wiring needed.
-
----
 
 ## Generated File Structure
 
@@ -300,6 +326,12 @@ Then run:
 ```bash
 composer update sazl/laravel-repokit
 ```
+
+---
+
+## Testing
+
+This package is tested using Orchestra Testbench to ensure compatibility with Laravel applications.
 
 ---
 
