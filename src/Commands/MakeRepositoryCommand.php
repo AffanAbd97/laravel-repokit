@@ -23,7 +23,7 @@ class MakeRepositoryCommand extends Command
         $repositoryName = $nameResolver->repository($name);
 
         $filesystem = new Filesystem();
-        $stubPath = __DIR__ . '/../../stubs';
+        $stubPath = __DIR__ . '/../stubs';
 
         $interfaceTemplate = file_get_contents("$stubPath/repository.contract.stub");
         $interfaceContent = str_replace('{{ interface }}', $interfaceName, $interfaceTemplate);

@@ -25,7 +25,7 @@ class MakeServiceCommand extends Command
         $serviceName = $nameResolver->service($name);
 
         $filesystem = new Filesystem();
-        $stubPath = __DIR__ . '/../../stubs/services';
+        $stubPath = __DIR__ . '/../stubs/services';
 
         $interfaceTemplate = file_get_contents($isEmpty ? "$stubPath/contracts/service-empty.contract.stub" : "$stubPath/contracts/service.contract.stub");
         $interfaceContent = str_replace('{{ interface }}', $interfaceName, $interfaceTemplate);
