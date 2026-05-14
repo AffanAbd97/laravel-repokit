@@ -5,80 +5,86 @@ namespace Sazl\LaravelRepokit\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
+use Sazl\LaravelRepokit\CommandGenerator;
+use Sazl\LaravelRepokit\Utils\ConfigWriter;
+use Sazl\LaravelRepokit\Utils\ConfigWriteResult;
 use Sazl\LaravelRepokit\Utils\NameResolver;
+use Sazl\LaravelRepokit\Utils\StubResolver;
 
-class MakeRepositoryCommand extends Command
+class MakeRepositoryCommand extends CommandGenerator
 {
     protected $signature = 'make:repository {name} {--M|model=}';
     protected $description = 'Generate a new repository with an interface and auto-bind it in AppServiceProvider';
 
+
+    protected ConfigWriter $configWriter;
+
+    public function __construct(Filesystem $filesystem, NameResolver $resolver, StubResolver $stubResolver, ConfigWriter $configWriter)
+    {
+        parent::__construct($filesystem, $resolver, $stubResolver);
+        $this->configWriter = $configWriter;
+    }
+
     public function handle()
     {
-        $nameResolver = new NameResolver();
         $name = $this->argument('name');
         $modelInput = $this->option('model');
         $model = $modelInput ? (str_contains($modelInput, '\\') ? $modelInput : "App\\Models\\$modelInput") : null;
 
-        $interfaceName = $nameResolver->repository($name, true);
-        $repositoryName = $nameResolver->repository($name);
 
-        $filesystem = new Filesystem();
-        $stubPath = __DIR__ . '/../../stubs';
+        $interfaceName = $this->resolver->repository($name, true);
+        $repositoryName = $this->resolver->repository($name);
 
-        $interfaceTemplate = file_get_contents("$stubPath/repository.contract.stub");
-        $interfaceContent = str_replace('{{ interface }}', $interfaceName, $interfaceTemplate);
+        // Render contract stub
+        $interfaceContent = $this->stubResolver->render('repositories', 'contract', [
+            '{{ interface }}' => $interfaceName,
+        ]);
 
-        $repositoryStub = $model ? 'repository.model.stub' : 'repository.stub';
-        $repositoryTemplate = file_get_contents("$stubPath/$repositoryStub");
-
-        $replacements = [
+        // Render implementation stub
+        $implVariant = $model ? 'implementation.model' : 'implementation';
+        $serviceContent = $this->stubResolver->render('repositories', $implVariant, [
             '{{ interface }}' => $interfaceName,
             '{{ repository }}' => $repositoryName,
             '{{ modelFull }}' => $model,
             '{{ modelClass }}' => $model ? class_basename($model) : '',
             '{{ table }}' => Str::snake(Str::pluralStudly($name)),
-        ];
+        ]);
 
-        foreach ($replacements as $key => $value) {
-            $repositoryTemplate = str_replace($key, $value, $repositoryTemplate);
+        // Write files
+        $contractPath = $this->getTargetPath("Contracts/{$interfaceName}.php");
+        $servicePath = $this->getTargetPath("{$repositoryName}.php");
+
+        $this->write($contractPath, $interfaceContent);
+        $this->write($servicePath, $serviceContent);
+
+        // Register binding in config
+        $interfaceFqcn = "App\\Repositories\\Contracts\\{$interfaceName}";
+        $implementationFqcn = "App\\Repositories\\Databases\\{$repositoryName}";
+
+        $configPath = config_path('repository.php');
+
+        // Auto-publish config if it doesn't exist yet
+        if (!file_exists($configPath)) {
+            $this->call('vendor:publish', ['--tag' => 'repository-config']);
         }
 
-        $filesystem->ensureDirectoryExists(app_path('Repositories/Contracts'));
-        $filesystem->ensureDirectoryExists(app_path('Repositories/Databases'));
+        $result = $this->configWriter->addBinding($configPath, $interfaceFqcn, $implementationFqcn);
 
-        $filesystem->put(app_path("Repositories/Contracts/{$interfaceName}.php"), $interfaceContent);
-        $filesystem->put(app_path("Repositories/Databases/{$repositoryName}.php"), $repositoryTemplate);
+        match ($result) {
+            ConfigWriteResult::SUCCESS => $this->info("Binding for {$interfaceName} registered in config/repository.php."),
+            ConfigWriteResult::ALREADY_EXISTS => $this->info("Binding for {$interfaceName} already exists in config/repository.php."),
+            ConfigWriteResult::FILE_NOT_FOUND => $this->error("Config file not found. Please publish it using: php artisan vendor:publish --tag=repository-config"),
+            ConfigWriteResult::NOT_WRITABLE => $this->error("Config file config/repository.php is not writable."),
+        };
 
-        $this->addBindingToServiceProvider($interfaceName, $repositoryName);
-        $this->info("✅ Repository and interface created successfully!");
+        // Output absolute file paths of generated files
+        $this->info($contractPath);
+        $this->info($servicePath);
     }
 
-    protected function addBindingToServiceProvider($interface, $repository)
+
+    protected function getTargetPath(string $name): string
     {
-        $providerPath = app_path('Providers/AppServiceProvider.php');
-        if (!file_exists($providerPath)) {
-            $this->error("⚠️ AppServiceProvider.php not found!");
-            return;
-        }
-
-        $content = file_get_contents($providerPath);
-        $binding = "        \$this->app->bind(\\App\\Repositories\\Contracts\\$interface::class, \\App\\Repositories\\Databases\\$repository::class);\n";
-
-        if (strpos($content, $binding) !== false) {
-            $this->info("ℹ️ Binding for $interface already exists.");
-            return;
-        }
-
-        $pattern = '/(public function register\(\): void\s*\{)(\n\s*)/';
-        $replacement = "$1\n$binding$2";
-
-        if (!preg_match($pattern, $content)) {
-            $this->error("❌ Could not find register() method in AppServiceProvider.");
-            return;
-        }
-
-        $content = preg_replace($pattern, $replacement, $content);
-        file_put_contents($providerPath, $content);
-        $this->info("✅ Binding for $interface added.");
+        return app_path("Repositories/{$name}");
     }
 }
