@@ -57,7 +57,14 @@ class MakeServiceCommand extends CommandGenerator
         $interfaceFqcn = "App\\Services\\Contracts\\{$interfaceName}";
         $implementationFqcn = "App\\Services\\{$serviceName}";
 
-        $result = $this->configWriter->addBinding(config_path('service.php'), $interfaceFqcn, $implementationFqcn);
+        $configPath = config_path('service.php');
+
+        // Auto-publish config if it doesn't exist yet
+        if (!file_exists($configPath)) {
+            $this->call('vendor:publish', ['--tag' => 'service-config']);
+        }
+
+        $result = $this->configWriter->addBinding($configPath, $interfaceFqcn, $implementationFqcn);
 
         match ($result) {
             ConfigWriteResult::SUCCESS => $this->info("Binding for {$interfaceName} registered in config/service.php."),
