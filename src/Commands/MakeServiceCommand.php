@@ -2,83 +2,77 @@
 
 namespace Sazl\LaravelRepokit\Commands;
 
-use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
+use Sazl\LaravelRepokit\CommandGenerator;
+use Sazl\LaravelRepokit\Utils\ConfigWriter;
+use Sazl\LaravelRepokit\Utils\ConfigWriteResult;
 use Sazl\LaravelRepokit\Utils\NameResolver;
+use Sazl\LaravelRepokit\Utils\StubResolver;
 
-class MakeServiceCommand extends Command
+class MakeServiceCommand extends CommandGenerator
 {
+    protected $signature = 'make:service {name} {--R|repository=} {--e|empty}';
+    protected $description = 'Generate a new service with an interface and register the binding in config';
 
+    protected ConfigWriter $configWriter;
 
-    protected $signature = 'make:service {name} {--R|repository=} {--empty|e}';
-    protected $description = 'Generate a new service with an interface and auto-bind it in AppServiceProvider';
+    public function __construct(Filesystem $filesystem, NameResolver $resolver, StubResolver $stubResolver, ConfigWriter $configWriter)
+    {
+        parent::__construct($filesystem, $resolver, $stubResolver);
+        $this->configWriter = $configWriter;
+    }
 
     public function handle()
     {
-        $nameResolver = new NameResolver();
         $name = $this->argument('name');
         $repoInput = $this->option('repository');
-        $isEmpty = $this->option('e');
+        $isEmpty = $this->option('empty');
 
-        $repo = $nameResolver->repository($repoInput ? $repoInput : $name, true);
-        $interfaceName = $nameResolver->service($name, true);
-        $serviceName = $nameResolver->service($name);
+        $interfaceName = $this->resolver->service($name, true);
+        $serviceName = $this->resolver->service($name);
+        $repositoryInterface = $this->resolver->repository($repoInput ?: $name, true);
 
-        $filesystem = new Filesystem();
-        $stubPath = __DIR__ . '/../stubs/services';
+        // Render contract stub
+        $contractVariant = $isEmpty ? 'contract.empty' : 'contract';
+        $interfaceContent = $this->stubResolver->render('services', $contractVariant, [
+            '{{ interface }}' => $interfaceName,
+        ]);
 
-        $interfaceTemplate = file_get_contents($isEmpty ? "$stubPath/contracts/service-empty.contract.stub" : "$stubPath/contracts/service.contract.stub");
-        $interfaceContent = str_replace('{{ interface }}', $interfaceName, $interfaceTemplate);
-
-        $serviceStub = $isEmpty ? 'service-empty.stub' : 'service.stub';
-        $serviceTemplate = file_get_contents("$stubPath/$serviceStub");
-
-        $replacements = [
+        // Render implementation stub
+        $implVariant = $isEmpty ? 'implementation.empty' : 'implementation';
+        $serviceContent = $this->stubResolver->render('services', $implVariant, [
             '{{ service_interface }}' => $interfaceName,
             '{{ service }}' => $serviceName,
-            '{{ repository_interface }}' => $repo,
-        ];
+            '{{ repository_interface }}' => $repositoryInterface,
+        ]);
 
-        foreach ($replacements as $key => $value) {
-            $serviceTemplate = str_replace($key, $value, $serviceTemplate);
-        }
+        // Write files
+        $contractPath = $this->getTargetPath("Contracts/{$interfaceName}.php");
+        $servicePath = $this->getTargetPath("{$serviceName}.php");
 
-        $filesystem->ensureDirectoryExists(app_path('Services/Contracts'));
-        $filesystem->ensureDirectoryExists(app_path('Services'));
+        $this->write($contractPath, $interfaceContent);
+        $this->write($servicePath, $serviceContent);
 
-        $filesystem->put(app_path("Services/Contracts/{$interfaceName}.php"), $interfaceContent);
-        $filesystem->put(app_path("Services/{$serviceName}.php"), $serviceTemplate);
+        // Register binding in config
+        $interfaceFqcn = "App\\Services\\Contracts\\{$interfaceName}";
+        $implementationFqcn = "App\\Services\\{$serviceName}";
 
-        $this->addBindingToServiceProvider($interfaceName, $serviceName);
-        $this->info("✅ Service and interface created successfully!");
+        $result = $this->configWriter->addBinding(config_path('service.php'), $interfaceFqcn, $implementationFqcn);
+
+        match ($result) {
+            ConfigWriteResult::SUCCESS => $this->info("Binding for {$interfaceName} registered in config/service.php."),
+            ConfigWriteResult::ALREADY_EXISTS => $this->info("Binding for {$interfaceName} already exists in config/service.php."),
+            ConfigWriteResult::FILE_NOT_FOUND => $this->error("Config file not found. Please publish it using: php artisan vendor:publish --tag=service-config"),
+            ConfigWriteResult::NOT_WRITABLE => $this->error("Config file config/service.php is not writable."),
+        };
+
+        // Output absolute file paths of generated files
+        $this->info($contractPath);
+        $this->info($servicePath);
     }
 
-    protected function addBindingToServiceProvider($interface, $service)
+    protected function getTargetPath(string $name): string
     {
-        $providerPath = app_path('Providers/AppServiceProvider.php');
-        if (!file_exists($providerPath)) {
-            $this->error("⚠️ AppServiceProvider.php not found!");
-            return;
-        }
-
-        $content = file_get_contents($providerPath);
-        $binding = "        \$this->app->bind(\\App\\Services\\Contracts\\$interface::class, \\App\\Services\\$service::class);\n";
-
-        if (strpos($content, $binding) !== false) {
-            $this->info("ℹ️ Binding for $interface already exists.");
-            return;
-        }
-
-        $pattern = '/(public function register\(\): void\s*\{)(\n\s*)/';
-        $replacement = "$1\n$binding$2";
-
-        if (!preg_match($pattern, $content)) {
-            $this->error("❌ Could not find register() method in AppServiceProvider.");
-            return;
-        }
-
-        $content = preg_replace($pattern, $replacement, $content);
-        file_put_contents($providerPath, $content);
-        $this->info("✅ Binding for $interface added.");
+        return app_path("Services/{$name}");
     }
 }

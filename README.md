@@ -305,7 +305,7 @@ This package uses Orchestra Testbench:
 
 ### 4. Test in a Laravel Project (Local Development)
 
-Add this package as a local repository in your Laravel project's `composer.json`:
+To use this package in a local Laravel project without publishing to Packagist or pushing to Git, add a path repository to your Laravel app's `composer.json`:
 
 ```json
 {
@@ -314,18 +314,21 @@ Add this package as a local repository in your Laravel project's `composer.json`
             "type": "path",
             "url": "../laravel-repokit"
         }
-    ],
-    "require": {
-        "sazl/laravel-repokit": "*"
-    }
+    ]
 }
 ```
 
-Then run:
+> The `url` is relative to your Laravel app's root. Adjust it to match where you cloned this package.
+
+Then require it using the `@dev` stability flag (since the package has no version tag defined):
 
 ```bash
-composer update sazl/laravel-repokit
+composer require sazl/laravel-repokit:@dev
 ```
+
+Composer will symlink the package directly into your `vendor` folder, so any changes you make to the package are reflected immediately — no reinstall needed.
+
+Laravel will auto-discover the service providers via the `extra.laravel.providers` entry in `composer.json`.
 
 ---
 

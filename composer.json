@@ -33,8 +33,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Sazl\\LaravelRepokit\\RepositoryProvider",
-                "Sazl\\LaravelRepokit\\ServiceLayerProvider"
+                "Sazl\\LaravelRepokit\\Providers\\RepokitProvider"
             ]
         }
     }

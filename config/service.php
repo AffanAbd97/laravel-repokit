@@ -1,5 +1,7 @@
 <?php
 
 return [
-    // Configuration options for service generation can go here.
+    'bindings' => [
+        // \App\Services\Contracts\UserServiceInterface::class => \App\Services\UserService::class,
+    ],
 ];
