@@ -3,6 +3,7 @@
 namespace Sazl\LaravelRepokit\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Sazl\LaravelRepokit\Commands\MakeModuleCommand;
 use Sazl\LaravelRepokit\Commands\MakeRepositoryCommand;
 use Sazl\LaravelRepokit\Commands\MakeServiceCommand;
 
@@ -52,6 +53,7 @@ class RepokitProvider extends ServiceProvider
             $this->commands([
                 MakeRepositoryCommand::class,
                 MakeServiceCommand::class,
+                MakeModuleCommand::class,
             ]);
 
             $this->publishes([
@@ -64,8 +66,8 @@ class RepokitProvider extends ServiceProvider
 
             // Publish stubs
             $this->publishes([
-                __DIR__ . '/stubs' => resource_path('stubs/repository'),
-            ], 'repository-stubs');
+                __DIR__ . '/../stubs' => resource_path('stubs/vendor/repokit'),
+            ], 'repokit-stubs');
 
 
         }
