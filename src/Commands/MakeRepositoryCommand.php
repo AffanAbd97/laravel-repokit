@@ -2,7 +2,6 @@
 
 namespace Sazl\LaravelRepokit\Commands;
 
-use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 use Sazl\LaravelRepokit\CommandGenerator;
@@ -13,8 +12,8 @@ use Sazl\LaravelRepokit\Utils\StubResolver;
 
 class MakeRepositoryCommand extends CommandGenerator
 {
-    protected $signature = 'make:repository {name} {--M|model=}';
-    protected $description = 'Generate a new repository with an interface and auto-bind it in AppServiceProvider';
+    protected $signature = 'make:repository {name} {--M|model=} {--force : Overwrite existing generated files}';
+    protected $description = 'Generate a new repository with an interface and register the binding in config/repository.php';
 
 
     protected ConfigWriter $configWriter;
@@ -30,10 +29,13 @@ class MakeRepositoryCommand extends CommandGenerator
         $name = $this->argument('name');
         $modelInput = $this->option('model');
         $model = $modelInput ? (str_contains($modelInput, '\\') ? $modelInput : "App\\Models\\$modelInput") : null;
-
+        $isforce = $this->option('force');
 
         $interfaceName = $this->resolver->repository($name, true);
         $repositoryName = $this->resolver->repository($name);
+
+        $this->info("Generating repository [{$repositoryName}].");
+        $this->line($model ? "Repository model: {$model}" : 'Repository type: Query Builder');
 
         // Render contract stub
         $interfaceContent = $this->stubResolver->render('repositories', 'contract', [
@@ -52,10 +54,10 @@ class MakeRepositoryCommand extends CommandGenerator
 
         // Write files
         $contractPath = $this->getTargetPath("Contracts/{$interfaceName}.php");
-        $servicePath = $this->getTargetPath("{$repositoryName}.php");
+        $servicePath = $this->getTargetPath("Databases/{$repositoryName}.php");
 
-        $this->write($contractPath, $interfaceContent);
-        $this->write($servicePath, $serviceContent);
+        $this->write($contractPath, $interfaceContent, $isforce);
+        $this->write($servicePath, $serviceContent, $isforce);
 
         // Register binding in config
         $interfaceFqcn = "App\\Repositories\\Contracts\\{$interfaceName}";
@@ -71,15 +73,11 @@ class MakeRepositoryCommand extends CommandGenerator
         $result = $this->configWriter->addBinding($configPath, $interfaceFqcn, $implementationFqcn);
 
         match ($result) {
-            ConfigWriteResult::SUCCESS => $this->info("Binding for {$interfaceName} registered in config/repository.php."),
-            ConfigWriteResult::ALREADY_EXISTS => $this->info("Binding for {$interfaceName} already exists in config/repository.php."),
+            ConfigWriteResult::SUCCESS => $this->info("Registered binding in config/repository.php: {$interfaceFqcn} => {$implementationFqcn}."),
+            ConfigWriteResult::ALREADY_EXISTS => $this->info("Binding for {$interfaceFqcn} already exists in config/repository.php; left unchanged."),
             ConfigWriteResult::FILE_NOT_FOUND => $this->error("Config file not found. Please publish it using: php artisan vendor:publish --tag=repository-config"),
             ConfigWriteResult::NOT_WRITABLE => $this->error("Config file config/repository.php is not writable."),
         };
-
-        // Output absolute file paths of generated files
-        $this->info($contractPath);
-        $this->info($servicePath);
     }
 
 

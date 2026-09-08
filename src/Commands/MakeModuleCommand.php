@@ -12,7 +12,7 @@ use Sazl\LaravelRepokit\Utils\StubResolver;
 
 class MakeModuleCommand extends CommandGenerator
 {
-    protected $signature = 'make:module {name} {--M|model=}';
+    protected $signature = 'make:module {name} {--M|model=} {--force : Overwrite existing generated files}';
     protected $description = 'Generate a new repository and service module with interfaces and auto-bind them';
 
     protected ConfigWriter $configWriter;
@@ -28,6 +28,10 @@ class MakeModuleCommand extends CommandGenerator
         $name = $this->argument('name');
         $modelInput = $this->option('model');
         $model = $modelInput ? (str_contains($modelInput, '\\') ? $modelInput : "App\\Models\\$modelInput") : null;
+        $isForce = $this->option('force');
+
+        $this->info("Generating module [{$name}].");
+        $this->line($model ? "Repository model: {$model}" : 'Repository type: Query Builder');
 
         // --- Repository Generation ---
 
@@ -53,8 +57,8 @@ class MakeModuleCommand extends CommandGenerator
         $repoContractPath = app_path("Repositories/Contracts/{$repoInterfaceName}.php");
         $repoImplPath = app_path("Repositories/Databases/{$repositoryName}.php");
 
-        $this->write($repoContractPath, $repoInterfaceContent);
-        $this->write($repoImplPath, $repoContent);
+        $this->write($repoContractPath, $repoInterfaceContent, $isForce);
+        $this->write($repoImplPath, $repoContent, $isForce);
 
         // --- Service Generation ---
 
@@ -78,8 +82,8 @@ class MakeModuleCommand extends CommandGenerator
         $serviceContractPath = app_path("Services/Contracts/{$serviceInterfaceName}.php");
         $serviceImplPath = app_path("Services/{$serviceName}.php");
 
-        $this->write($serviceContractPath, $serviceInterfaceContent);
-        $this->write($serviceImplPath, $serviceContent);
+        $this->write($serviceContractPath, $serviceInterfaceContent, $isForce);
+        $this->write($serviceImplPath, $serviceContent, $isForce);
 
         // --- Config Binding Registration ---
 
@@ -96,8 +100,8 @@ class MakeModuleCommand extends CommandGenerator
         $repoResult = $this->configWriter->addBinding($repoConfigPath, $repoInterfaceFqcn, $repoImplementationFqcn);
 
         match ($repoResult) {
-            ConfigWriteResult::SUCCESS => $this->info("Binding for {$repoInterfaceName} registered in config/repository.php."),
-            ConfigWriteResult::ALREADY_EXISTS => $this->info("Binding for {$repoInterfaceName} already exists in config/repository.php."),
+            ConfigWriteResult::SUCCESS => $this->info("Registered binding in config/repository.php: {$repoInterfaceFqcn} => {$repoImplementationFqcn}."),
+            ConfigWriteResult::ALREADY_EXISTS => $this->info("Binding for {$repoInterfaceFqcn} already exists in config/repository.php; left unchanged."),
             ConfigWriteResult::FILE_NOT_FOUND => $this->error("Config file not found. Please publish it using: php artisan vendor:publish --tag=repository-config"),
             ConfigWriteResult::NOT_WRITABLE => $this->error("Config file config/repository.php is not writable."),
         };
@@ -115,17 +119,11 @@ class MakeModuleCommand extends CommandGenerator
         $serviceResult = $this->configWriter->addBinding($serviceConfigPath, $serviceInterfaceFqcn, $serviceImplementationFqcn);
 
         match ($serviceResult) {
-            ConfigWriteResult::SUCCESS => $this->info("Binding for {$serviceInterfaceName} registered in config/service.php."),
-            ConfigWriteResult::ALREADY_EXISTS => $this->info("Binding for {$serviceInterfaceName} already exists in config/service.php."),
+            ConfigWriteResult::SUCCESS => $this->info("Registered binding in config/service.php: {$serviceInterfaceFqcn} => {$serviceImplementationFqcn}."),
+            ConfigWriteResult::ALREADY_EXISTS => $this->info("Binding for {$serviceInterfaceFqcn} already exists in config/service.php; left unchanged."),
             ConfigWriteResult::FILE_NOT_FOUND => $this->error("Config file not found. Please publish it using: php artisan vendor:publish --tag=service-config"),
             ConfigWriteResult::NOT_WRITABLE => $this->error("Config file config/service.php is not writable."),
         };
-
-        // Output absolute file paths of all generated files
-        $this->info($repoContractPath);
-        $this->info($repoImplPath);
-        $this->info($serviceContractPath);
-        $this->info($serviceImplPath);
     }
 
     protected function getTargetPath(string $name): string
