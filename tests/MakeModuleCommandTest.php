@@ -3,6 +3,7 @@
 namespace Sazl\LaravelRepokit\Tests;
 
 use Illuminate\Support\Facades\File;
+use RuntimeException;
 
 class MakeModuleCommandTest extends TestCase
 {
@@ -51,6 +52,14 @@ class MakeModuleCommandTest extends TestCase
     public function test_make_module_generates_four_files_without_model(): void
     {
         $this->artisan('make:module', ['name' => 'User'])
+            ->expectsOutput('Generating module [User].')
+            ->expectsOutput('Repository type: Query Builder')
+            ->expectsOutput('Created: ' . app_path('Repositories/Contracts/UserRepositoryInterface.php'))
+            ->expectsOutput('Created: ' . app_path('Repositories/Databases/UserRepository.php'))
+            ->expectsOutput('Created: ' . app_path('Services/Contracts/UserServiceInterface.php'))
+            ->expectsOutput('Created: ' . app_path('Services/UserService.php'))
+            ->expectsOutputToContain('App\\Repositories\\Contracts\\UserRepositoryInterface => App\\Repositories\\Databases\\UserRepository')
+            ->expectsOutputToContain('App\\Services\\Contracts\\UserServiceInterface => App\\Services\\UserService')
             ->assertSuccessful();
 
         $this->assertFileExists(app_path('Repositories/Contracts/UserRepositoryInterface.php'));
@@ -63,6 +72,7 @@ class MakeModuleCommandTest extends TestCase
     public function test_make_module_with_model_uses_model_stub(): void
     {
         $this->artisan('make:module', ['name' => 'User', '--model' => 'User'])
+            ->expectsOutput('Repository model: App\\Models\\User')
             ->assertSuccessful();
 
         $repoContent = File::get(app_path('Repositories/Databases/UserRepository.php'));
@@ -116,9 +126,14 @@ class MakeModuleCommandTest extends TestCase
         $this->artisan('make:module', ['name' => 'User'])
             ->assertSuccessful();
 
-        // Second run should report "already exists"
-        $this->artisan('make:module', ['name' => 'User'])
-            ->expectsOutputToContain('already exists')
+        // Force regeneration without replacing the existing bindings.
+        $this->artisan('make:module', ['name' => 'User', '--force' => true])
+            ->expectsOutput('Overwritten: ' . app_path('Repositories/Contracts/UserRepositoryInterface.php'))
+            ->expectsOutput('Overwritten: ' . app_path('Repositories/Databases/UserRepository.php'))
+            ->expectsOutput('Overwritten: ' . app_path('Services/Contracts/UserServiceInterface.php'))
+            ->expectsOutput('Overwritten: ' . app_path('Services/UserService.php'))
+            ->expectsOutputToContain('already exists in config/repository.php; left unchanged.')
+            ->expectsOutputToContain('already exists in config/service.php; left unchanged.')
             ->assertSuccessful();
     }
 
@@ -129,7 +144,7 @@ class MakeModuleCommandTest extends TestCase
             ->assertSuccessful();
 
         // Second run
-        $this->artisan('make:module', ['name' => 'User'])
+        $this->artisan('make:module', ['name' => 'User', '--force' => true])
             ->assertSuccessful();
 
         $repoConfig = File::get(config_path('repository.php'));
@@ -144,5 +159,23 @@ class MakeModuleCommandTest extends TestCase
             1,
             substr_count($serviceConfig, 'UserServiceInterface')
         );
+    }
+
+    public function test_existing_file_error_explains_recovery_and_preserves_content(): void
+    {
+        $path = app_path('Repositories/Contracts/UserRepositoryInterface.php');
+        File::ensureDirectoryExists(dirname($path));
+        File::put($path, 'Manual changes');
+
+        try {
+            $this->artisan('make:module', ['name' => 'User'])->run();
+            $this->fail('Expected an existing-file error.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString("File already exists: {$path}", $exception->getMessage());
+            $this->assertStringContainsString('Choose a different name', $exception->getMessage());
+            $this->assertStringContainsString('--force to overwrite existing files', $exception->getMessage());
+            $this->assertStringContainsString('Manual changes will be lost.', $exception->getMessage());
+            $this->assertSame('Manual changes', File::get($path));
+        }
     }
 }
