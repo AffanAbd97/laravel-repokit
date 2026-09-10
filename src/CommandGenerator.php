@@ -4,6 +4,7 @@ namespace Sazl\LaravelRepokit;
 
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
+use RuntimeException;
 use Sazl\LaravelRepokit\Utils\NameResolver;
 use Sazl\LaravelRepokit\Utils\StubResolver;
 
@@ -37,9 +38,26 @@ abstract class CommandGenerator extends Command
         return $content;
     }
 
-    protected function write(string $path, string $content): void
+    protected function checkExist(string $path, bool $force = false)
     {
+        $exists = $this->files->exists($path);
+
+        if ($exists && !$force) {
+            throw new RuntimeException(
+                "File already exists: {$path}\nChoose a different name, or rerun with --force to overwrite existing files. Manual changes will be lost."
+            );
+        }
+
+        return $exists;
+    }
+
+    protected function write(string $path, string $content, bool $force = false): void
+    {
+
+        $exists = $this->checkExist($path, $force);
         $this->files->ensureDirectoryExists(dirname($path));
         $this->files->put($path, $content);
+
+        $this->info(($exists ? 'Overwritten: ' : 'Created: ') . $path);
     }
 }
