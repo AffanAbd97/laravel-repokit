@@ -1,342 +1,286 @@
 # Laravel RepoKit
-> Clean architecture scaffolding for Laravel (Repository + Service layers)
 
 ![PHP](https://img.shields.io/badge/PHP-8.1+-blue)
-![Laravel](https://img.shields.io/badge/Laravel-10%2B-red)
+![Laravel](https://img.shields.io/badge/Laravel-10%20%7C%2011%20%7C%2012-red)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A Laravel package to scaffold Repository and Service layers, helping enforce clean architecture, improve maintainability, and reduce boilerplate in backend applications.
+Generate Laravel repositories, services, and their interfaces with Artisan. Create both layers in one command, choose Query Builder or Eloquent, and customize the generated code through published stubs.
 
----
-
-## Why?
-
-In many Laravel projects, business logic and data access are tightly coupled, making the code harder to maintain, scale, and test.
-
-Laravel RepoKit helps you:
-- Separate concerns using the Repository and Service patterns
-- Maintain a clean and scalable architecture
-- Reduce repetitive boilerplate code
-- Speed up development with automated scaffolding
-
-This also helps you standardize your application structure across teams and projects.
-
----
-
-## Key Features
-
-- Repository & Service scaffolding
-- Query Builder and Eloquent support
-- Automatic interface binding
-- Clean architecture enforcement
-- Consistent project structure
-
----
-
-## Architecture Overview
-
+```text
 Controller → Service → Repository → Database
-
-- **Controller** handles HTTP requests
-- **Service** contains business logic
-- **Repository** handles data access
-
----
-
-## Auto-Binding
-
-All generated interfaces are automatically bound to their implementations in `AppServiceProvider`.
-
-No manual dependency injection setup is required.
-
----
+```
 
 ## Requirements
 
-- PHP ^8.1
-- Laravel 10.x, 11.x, or 12.x
-
----
+PHP `^8.1` and Laravel 10.x, 11.x, or 12.x, with a PHP version supported by your Laravel release.
 
 ## Installation
-
-Install the package via Composer:
 
 ```bash
 composer require sazl/laravel-repokit
 ```
 
-The service providers will be auto-discovered by Laravel.
-
----
+Laravel discovers `Sazl\LaravelRepokit\Providers\RepokitProvider` automatically through Composer.
 
 ## Usage
 
-### Repositories
+Use a base name such as `User` or `user_profile`. Names are converted to StudlyCase, then given the appropriate repository, service, or interface suffix.
 
-#### Basic Repository (Query Builder)
+### Generate a complete module
+
+```bash
+php artisan make:module User
+```
+
+Creates a repository, a service that injects its repository interface, and both interfaces. It also records the bindings in `config/repository.php` and `config/service.php`.
+
+The repository uses Query Builder by default. To inject an Eloquent model instead:
+
+```bash
+php artisan make:module User --model=User
+```
+
+The model resolves to `App\Models\User`. The command generates the repository and service files; create the model separately. See [Configuration and bindings](#configuration-and-bindings) for repository container registration.
+
+### Generate a repository
 
 ```bash
 php artisan make:repository User
 ```
 
-This creates:
-- `app/Repositories/Contracts/UserRepositoryInterface.php`
-- `app/Repositories/Databases/UserRepository.php`
+Creates `app/Repositories/Contracts/UserRepositoryInterface.php` and `app/Repositories/Databases/UserRepository.php`.
 
-The generated repository uses Laravel's Query Builder (`DB` facade) with a raw query builder approach.
+The default implementation uses the `DB` facade, the `mysql` connection, and a plural snake_case table name such as `users`. Adjust the generated connection and table properties for your application.
 
-#### Repository with Eloquent Model
+To use an Eloquent model:
 
 ```bash
 php artisan make:repository User --model=User
 ```
 
-Generates the same structure, but uses Eloquent model injection instead of Query Builder. The model is resolved as `App\Models\User` unless a fully-qualified class name is provided.
+`--model` also accepts a full namespace:
 
----
+```bash
+php artisan make:repository User --model='App\Custom\User'
+```
 
-### Services
+The short option is `-M`. The same model options work with `make:module`.
 
-#### Service with Repository Injection
+### Generate a service
 
 ```bash
 php artisan make:service User
 ```
 
-This creates:
-- `app/Services/Contracts/UserServiceInterface.php`
-- `app/Services/UserService.php`
+Creates `app/Services/Contracts/UserServiceInterface.php` and `app/Services/UserService.php`. By default, the service injects `App\Repositories\Contracts\UserRepositoryInterface`.
 
-By default the service is wired to the repository that matches the service name (`UserRepositoryInterface`). Use `--repository` to point to a different one:
+To inject a different repository interface:
 
 ```bash
 php artisan make:service Order --repository=User
 ```
 
-#### Empty Service (no pre-built methods)
+The short option is `-R`. Pass the repository's base name. This command creates only the service and its interface, so generate the repository separately or use `make:module` to create both layers.
+
+### Generate an empty service
 
 ```bash
 php artisan make:service User --empty
 ```
 
-or the short flag:
+The short option is `-e`. The bundled empty template removes the pre-built methods from the interface and service, but keeps the constructor and repository injection. You can combine `--empty` with `--repository`.
+
+### Replace existing files
+
+All three generators stop when they encounter an existing target file unless `--force` is supplied:
 
 ```bash
-php artisan make:service User -e
+php artisan make:module User --model=User --force
+php artisan make:repository User --force
+php artisan make:service User --empty --force
 ```
 
-Generates the same file structure but with an empty interface and a minimal service class, useful when you want to define your own contract from scratch.
+These are separate examples. Rerun with the options you want in the replacement files. `--force` overwrites every existing file generated by that command, discarding manual changes. For a module, this includes all four files. Existing config bindings remain unchanged, even with `--force`.
 
----
+Without `--force`, an existing file produces this message:
 
-
-## Generated File Structure
-
+```text
+File already exists: /project/app/Repositories/Contracts/UserRepositoryInterface.php
+Choose a different name, or rerun with --force to overwrite existing files. Manual changes will be lost.
 ```
+
+Files are written in order. If a later file conflicts, files written earlier in that run remain on disk.
+
+## Generated file structure
+
+For `make:module User`:
+
+```text
 app/
 ├── Repositories/
 │   ├── Contracts/
-│   │   └── {Name}RepositoryInterface.php
+│   │   └── UserRepositoryInterface.php
 │   └── Databases/
-│       └── {Name}Repository.php
+│       └── UserRepository.php
 └── Services/
     ├── Contracts/
-    │   └── {Name}ServiceInterface.php
-    └── {Name}Service.php
+    │   └── UserServiceInterface.php
+    └── UserService.php
+config/
+├── repository.php
+└── service.php
 ```
 
----
+The bundled templates provide these methods:
 
-## Example Output
+| Repository | Service | Behavior |
+| --- | --- | --- |
+| `all()` | `getAll()` | Fetch all records. |
+| `find($id)` | `getById($id)` | Find a record by ID. |
+| `create(array $data)` | `create(array $data)` | Insert a record. |
+| `update($id, array $data)` | `update($id, array $data)` | Update a record by ID. |
+| `delete($id)` | `delete($id)` | Delete a record by ID. |
 
-### Repository (Query Builder)
+Service methods delegate to the injected repository. Query Builder `create()` returns an inserted ID, while Eloquent `create()` returns a model. The Eloquent template returns `false` when updating or deleting a missing record.
+
+## Configuration and bindings
+
+Generators publish the relevant config file automatically if it is missing. You can also publish the files directly:
 
 ```bash
-php artisan make:repository User
+php artisan vendor:publish --tag=repository-config
+php artisan vendor:publish --tag=service-config
 ```
 
-**Interface** (`app/Repositories/Contracts/UserRepositoryInterface.php`):
+Repository mappings are written to `config/repository.php`:
 
 ```php
-interface UserRepositoryInterface
-{
-    public function all();
-    public function find($id);
-    public function create(array $data);
-    public function update($id, array $data);
-    public function delete($id);
-}
+<?php
+
+return [
+    'bindings' => [
+        \App\Repositories\Contracts\UserRepositoryInterface::class => \App\Repositories\Databases\UserRepository::class,
+    ],
+];
 ```
 
-**Implementation** (`app/Repositories/Databases/UserRepository.php`):
+Service mappings are written to `config/service.php`:
 
 ```php
-class UserRepository implements UserRepositoryInterface
-{
-    protected $connection = 'mysql';
-    protected $table = 'users';
+<?php
 
-    protected function query()
-    {
-        return DB::connection($this->connection)->table($this->table);
-    }
-
-    public function all() { return $this->query()->get(); }
-    public function find($id) { return $this->query()->where('id', $id)->first(); }
-    public function create(array $data) { return $this->query()->insertGetId($data); }
-    public function update($id, array $data) { return $this->query()->where('id', $id)->update($data); }
-    public function delete($id) { return $this->query()->where('id', $id)->delete(); }
-}
+return [
+    'bindings' => [
+        \App\Services\Contracts\UserServiceInterface::class => \App\Services\UserService::class,
+    ],
+];
 ```
 
----
+An existing mapping for an interface is kept as-is. Adding a new mapping rewrites the config file as a bindings array, so keep unrelated settings and comments elsewhere.
 
-### Repository (Eloquent Model)
+The current package provider loads `service.bindings` into Laravel's container when the interface and implementation exist. It does not currently load `repository.bindings`. To resolve a generated service's repository dependency, add this binding to your application's `AppServiceProvider::register()`:
+
+```php
+$this->app->bind(
+    \App\Repositories\Contracts\UserRepositoryInterface::class,
+    \App\Repositories\Databases\UserRepository::class,
+);
+```
+
+Repeat the binding for each generated repository. The generators write config mappings; they do not edit `AppServiceProvider`.
+
+## Console output
+
+For `php artisan make:module User --model=User`, with config files already published and no existing generated files:
+
+```text
+Generating module [User].
+Repository model: App\Models\User
+Created: /project/app/Repositories/Contracts/UserRepositoryInterface.php
+Created: /project/app/Repositories/Databases/UserRepository.php
+Created: /project/app/Services/Contracts/UserServiceInterface.php
+Created: /project/app/Services/UserService.php
+Registered binding in config/repository.php: App\Repositories\Contracts\UserRepositoryInterface => App\Repositories\Databases\UserRepository.
+Registered binding in config/service.php: App\Services\Contracts\UserServiceInterface => App\Services\UserService.
+```
+
+Paths are absolute and depend on your project location. Each successful write reports `Created:` or `Overwritten:`. A new file still reports `Created:` when `--force` is supplied.
+
+Repository and module commands show the selected model or `Repository type: Query Builder`. Service commands show the repository interface and identify an empty template when selected.
+
+Existing bindings report `already exists` and `left unchanged`. Missing or unwritable config files produce an error message after file generation.
+
+## Customize generated code
+
+Publish the stubs into your application:
 
 ```bash
-php artisan make:repository User --model=User
+php artisan vendor:publish --tag=repokit-stubs
 ```
 
-**Implementation** (`app/Repositories/Databases/UserRepository.php`):
+Edit the files under `resources/stubs/vendor/repokit/`:
 
-```php
-class UserRepository implements UserRepositoryInterface
-{
-    public function __construct(protected User $model) {}
+| Stub | Used for |
+| --- | --- |
+| `repositories/contract.stub` | Repository interfaces. |
+| `repositories/implementation.stub` | Query Builder repositories. |
+| `repositories/implementation.model.stub` | Repositories generated with `--model`. |
+| `services/contract.stub` | Standard service interfaces. |
+| `services/implementation.stub` | Standard services, including those generated by `make:module`. |
+| `services/contract.empty.stub` | Service interfaces generated with `--empty`. |
+| `services/implementation.empty.stub` | Services generated with `--empty`. |
 
-    public function all() { return $this->model->all(); }
-    public function find($id) { return $this->model->find($id); }
-    public function create(array $data) { return $this->model->create($data); }
-    public function update($id, array $data) { ... }
-    public function delete($id) { ... }
-}
-```
+Keep the existing `{{ ... }}` placeholders where you want the generators to insert names and model details. Published stubs take precedence over bundled stubs. If a published file is missing, the generator falls back to the corresponding bundled file.
 
----
+Stub edits affect future generation. Regenerating existing files requires `--force` and replaces their contents with the newly rendered stubs.
 
-### Service
+## Command reference
 
-```bash
-php artisan make:service User
-```
+| Command | Options | Result |
+| --- | --- | --- |
+| `make:module {name}` | `--model` / `-M`, `--force` | Repository, service, both interfaces, and both config mappings. |
+| `make:repository {name}` | `--model` / `-M`, `--force` | Repository, interface, and repository config mapping. |
+| `make:service {name}` | `--repository` / `-R`, `--empty` / `-e`, `--force` | Service, interface, and service config mapping. |
 
-**Interface** (`app/Services/Contracts/UserServiceInterface.php`):
+## Local development
 
-```php
-interface UserServiceInterface
-{
-    public function getAll();
-    public function getById($id);
-    public function create(array $data);
-    public function update($id, array $data);
-    public function delete($id);
-}
-```
-
-**Implementation** (`app/Services/UserService.php`):
-
-```php
-class UserService implements UserServiceInterface
-{
-    public function __construct(
-        protected UserRepositoryInterface $repository
-    ) {}
-
-    public function getAll() { return $this->repository->all(); }
-    public function getById($id) { return $this->repository->find($id); }
-    public function create(array $data) { return $this->repository->create($data); }
-    public function update($id, array $data) { return $this->repository->update($id, $data); }
-    public function delete($id) { return $this->repository->delete($id); }
-}
-```
-
----
-
-## Command Reference
-
-| Command | Options | Description |
-|---|---|---|
-| `make:repository {name}` | `--model` / `-M` | Generate a repository. Optionally inject an Eloquent model. |
-| `make:service {name}` | `--repository` / `-R`, `--empty` / `-e` | Generate a service. Optionally target a specific repository or generate an empty scaffold. |
-
----
-
-## Use Case
-
-This package is ideal for:
-- Medium to large-scale Laravel applications
-- Teams enforcing clean architecture practices
-- Developers who want consistent repository and service structure
-- Projects requiring better separation of concerns
-
----
-
-## Background
-
-This package is inspired by real-world backend development, where maintaining a clear separation between business logic and data access is essential for long-term scalability and maintainability.
-
----
-
-## Clone and Test Locally
-
-### 1. Clone the Repository
+Clone the package and install its dependencies:
 
 ```bash
 git clone https://github.com/sazl/laravel-repokit.git
 cd laravel-repokit
-```
-
-### 2. Install Dependencies
-
-```bash
 composer install
 ```
 
-### 3. Run Tests
-
-This package uses Orchestra Testbench:
+The test suite uses PHPUnit and Orchestra Testbench. Run it from the package directory:
 
 ```bash
-./vendor/bin/phpunit
+php vendor/bin/phpunit
 ```
 
----
-
-### 4. Test in a Laravel Project (Local Development)
-
-To use this package in a local Laravel project without publishing to Packagist or pushing to Git, add a path repository to your Laravel app's `composer.json`:
+To use your local checkout in a Laravel application, add a path repository to that application's `composer.json`:
 
 ```json
 {
     "repositories": [
         {
             "type": "path",
-            "url": "../laravel-repokit"
+            "url": "../laravel-repokit",
+            "options": {
+                "symlink": true
+            }
         }
     ]
 }
 ```
 
-> The `url` is relative to your Laravel app's root. Adjust it to match where you cloned this package.
-
-Then require it using the `@dev` stability flag (since the package has no version tag defined):
+Adjust `url` relative to the Laravel application's directory. Then run this command from that application:
 
 ```bash
 composer require sazl/laravel-repokit:@dev
 ```
 
-Composer will symlink the package directly into your `vendor` folder, so any changes you make to the package are reflected immediately — no reinstall needed.
-
-Laravel will auto-discover the service providers via the `extra.laravel.providers` entry in `composer.json`.
-
----
-
-## Testing
-
-This package is tested using Orchestra Testbench to ensure compatibility with Laravel applications.
-
----
+The path repository requests a symlink so local package edits are reflected in the application. Laravel discovers the package provider through its Composer metadata.
 
 ## License
 

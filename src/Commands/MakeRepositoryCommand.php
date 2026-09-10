@@ -34,6 +34,13 @@ class MakeRepositoryCommand extends CommandGenerator
         $interfaceName = $this->resolver->repository($name, true);
         $repositoryName = $this->resolver->repository($name);
 
+
+        $contractPath = $this->getTargetPath("Contracts/{$interfaceName}.php");
+        $repoPath = $this->getTargetPath("Databases/{$repositoryName}.php");
+        $this->checkExist($contractPath, $isforce);
+        $this->checkExist($repoPath, $isforce);
+
+
         $this->info("Generating repository [{$repositoryName}].");
         $this->line($model ? "Repository model: {$model}" : 'Repository type: Query Builder');
 
@@ -44,7 +51,7 @@ class MakeRepositoryCommand extends CommandGenerator
 
         // Render implementation stub
         $implVariant = $model ? 'implementation.model' : 'implementation';
-        $serviceContent = $this->stubResolver->render('repositories', $implVariant, [
+        $repoContent = $this->stubResolver->render('repositories', $implVariant, [
             '{{ interface }}' => $interfaceName,
             '{{ repository }}' => $repositoryName,
             '{{ modelFull }}' => $model,
@@ -53,11 +60,9 @@ class MakeRepositoryCommand extends CommandGenerator
         ]);
 
         // Write files
-        $contractPath = $this->getTargetPath("Contracts/{$interfaceName}.php");
-        $servicePath = $this->getTargetPath("Databases/{$repositoryName}.php");
 
         $this->write($contractPath, $interfaceContent, $isforce);
-        $this->write($servicePath, $serviceContent, $isforce);
+        $this->write($repoPath, $repoContent, $isforce);
 
         // Register binding in config
         $interfaceFqcn = "App\\Repositories\\Contracts\\{$interfaceName}";

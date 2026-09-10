@@ -38,7 +38,7 @@ abstract class CommandGenerator extends Command
         return $content;
     }
 
-    protected function write(string $path, string $content, bool $force = false): void
+    protected function checkExist(string $path, bool $force = false)
     {
         $exists = $this->files->exists($path);
 
@@ -47,6 +47,14 @@ abstract class CommandGenerator extends Command
                 "File already exists: {$path}\nChoose a different name, or rerun with --force to overwrite existing files. Manual changes will be lost."
             );
         }
+
+        return $exists;
+    }
+
+    protected function write(string $path, string $content, bool $force = false): void
+    {
+
+        $exists = $this->checkExist($path, $force);
         $this->files->ensureDirectoryExists(dirname($path));
         $this->files->put($path, $content);
 
