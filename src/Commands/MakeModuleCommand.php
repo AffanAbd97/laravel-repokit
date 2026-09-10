@@ -30,13 +30,35 @@ class MakeModuleCommand extends CommandGenerator
         $model = $modelInput ? (str_contains($modelInput, '\\') ? $modelInput : "App\\Models\\$modelInput") : null;
         $isForce = $this->option('force');
 
-        $this->info("Generating module [{$name}].");
-        $this->line($model ? "Repository model: {$model}" : 'Repository type: Query Builder');
 
         // --- Repository Generation ---
 
         $repoInterfaceName = $this->resolver->repository($name, true);
         $repositoryName = $this->resolver->repository($name);
+
+        // Write repository files
+        $repoContractPath = app_path("Repositories/Contracts/{$repoInterfaceName}.php");
+        $repoImplPath = app_path("Repositories/Databases/{$repositoryName}.php");
+
+        // --- Service Generation ---
+
+        $serviceInterfaceName = $this->resolver->service($name, true);
+        $serviceName = $this->resolver->service($name);
+
+        // Write service files
+        $serviceContractPath = app_path("Services/Contracts/{$serviceInterfaceName}.php");
+        $serviceImplPath = app_path("Services/{$serviceName}.php");
+
+        //Check Existing
+        $this->checkExist($repoContractPath, $isForce);
+        $this->checkExist($repoImplPath, $isForce);
+        $this->checkExist($serviceContractPath, $isForce);
+        $this->checkExist($serviceImplPath, $isForce);
+
+
+        $this->info("Generating module [{$name}].");
+        $this->line($model ? "Repository model: {$model}" : 'Repository type: Query Builder');
+
 
         // Render repository contract stub
         $repoInterfaceContent = $this->stubResolver->render('repositories', 'contract', [
@@ -53,17 +75,11 @@ class MakeModuleCommand extends CommandGenerator
             '{{ table }}' => Str::snake(Str::pluralStudly($name)),
         ]);
 
-        // Write repository files
-        $repoContractPath = app_path("Repositories/Contracts/{$repoInterfaceName}.php");
-        $repoImplPath = app_path("Repositories/Databases/{$repositoryName}.php");
 
         $this->write($repoContractPath, $repoInterfaceContent, $isForce);
         $this->write($repoImplPath, $repoContent, $isForce);
 
-        // --- Service Generation ---
 
-        $serviceInterfaceName = $this->resolver->service($name, true);
-        $serviceName = $this->resolver->service($name);
         $repositoryInterface = $this->resolver->repository($name, true);
 
         // Render service contract stub
@@ -78,9 +94,7 @@ class MakeModuleCommand extends CommandGenerator
             '{{ repository_interface }}' => $repositoryInterface,
         ]);
 
-        // Write service files
-        $serviceContractPath = app_path("Services/Contracts/{$serviceInterfaceName}.php");
-        $serviceImplPath = app_path("Services/{$serviceName}.php");
+
 
         $this->write($serviceContractPath, $serviceInterfaceContent, $isForce);
         $this->write($serviceImplPath, $serviceContent, $isForce);

@@ -33,6 +33,14 @@ class MakeServiceCommand extends CommandGenerator
         $serviceName = $this->resolver->service($name);
         $repositoryInterface = $this->resolver->repository($repoInput ?: $name, true);
 
+        // Write files
+        $contractPath = $this->getTargetPath("Contracts/{$interfaceName}.php");
+        $servicePath = $this->getTargetPath("{$serviceName}.php");
+
+        $this->checkExist($contractPath, $isforce);
+        $this->checkExist($servicePath, $isforce);
+
+
         $this->info("Generating service [{$serviceName}].");
         $this->line("Repository interface: App\\Repositories\\Contracts\\{$repositoryInterface}");
         if ($isEmpty) {
@@ -53,9 +61,6 @@ class MakeServiceCommand extends CommandGenerator
             '{{ repository_interface }}' => $repositoryInterface,
         ]);
 
-        // Write files
-        $contractPath = $this->getTargetPath("Contracts/{$interfaceName}.php");
-        $servicePath = $this->getTargetPath("{$serviceName}.php");
 
         $this->write($contractPath, $interfaceContent, $isforce);
         $this->write($servicePath, $serviceContent, $isforce);
